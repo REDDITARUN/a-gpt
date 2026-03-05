@@ -1,0 +1,6 @@
+understanding/
+basic.ipynb
+train.ipynb
+env/
+wandb/
+.env
