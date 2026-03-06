@@ -20,6 +20,10 @@ def preview(path: Path, n_chars: int = 500):
     print("length of the data:", len(text))
 
 
+def file_ready(path: Path, min_bytes: int = 1024) -> bool:
+    return path.exists() and path.stat().st_size >= min_bytes
+
+
 def main():
     # Always save into this repository's data directory.
     data_dir = Path(__file__).resolve().parent
@@ -29,27 +33,39 @@ def main():
     code_out = data_dir / "python_code_text.txt"
 
     # 1) Tiny Shakespeare baseline text
-    urllib.request.urlretrieve(
-        "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
-        str(tiny_out),
-    )
-    print(f"Data saved to {tiny_out}")
+    if file_ready(tiny_out):
+        print(f"Using existing file: {tiny_out}")
+    else:
+        urllib.request.urlretrieve(
+            "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
+            str(tiny_out),
+        )
+        print(f"Data saved to {tiny_out}")
 
     # 2) Cosmopedia wikihow subset
-    ds_cosmo = load_dataset("HuggingFaceTB/cosmopedia", "wikihow", split="train")
-    write_text_rows(cosmo_out, (row["text"] for row in ds_cosmo))
-    print(f"Data saved to {cosmo_out}")
+    if file_ready(cosmo_out, min_bytes=1024 * 1024):
+        print(f"Using existing file: {cosmo_out}")
+    else:
+        ds_cosmo = load_dataset("HuggingFaceTB/cosmopedia", "wikihow", split="train")
+        write_text_rows(cosmo_out, (row["text"] for row in ds_cosmo))
+        print(f"Data saved to {cosmo_out}")
 
     # 3) WikiText-2 (factual/news style)
-    ds_wiki = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
-    write_text_rows(wiki_out, (row["text"] for row in ds_wiki))
-    print(f"Data saved to {wiki_out}")
+    if file_ready(wiki_out, min_bytes=1024 * 1024):
+        print(f"Using existing file: {wiki_out}")
+    else:
+        ds_wiki = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
+        write_text_rows(wiki_out, (row["text"] for row in ds_wiki))
+        print(f"Data saved to {wiki_out}")
 
     # 4) CodeSearchNet Python subset (code style)
     # Keep only raw function/code bodies for a code-heavy pretraining mix.
-    ds_code = load_dataset("code_search_net", "python", split="train")
-    write_text_rows(code_out, (row["whole_func_string"] for row in ds_code))
-    print(f"Data saved to {code_out}")
+    if file_ready(code_out, min_bytes=1024 * 1024):
+        print(f"Using existing file: {code_out}")
+    else:
+        ds_code = load_dataset("code_search_net", "python", split="train")
+        write_text_rows(code_out, (row["whole_func_string"] for row in ds_code))
+        print(f"Data saved to {code_out}")
 
     # Quick previews
     preview(cosmo_out)

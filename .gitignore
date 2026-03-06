@@ -4,3 +4,4 @@ train.ipynb
 env/
 wandb/
 .env
+data/*.txt
