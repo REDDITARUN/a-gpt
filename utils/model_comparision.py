@@ -1,7 +1,13 @@
 import torch
+from models.a_diffusion_gpt import (
+    GPT_Adaptive_Diffusion,
+    GPT_Adaptive_Diffusion_Config,
+    HyperConfig as DiffusionHyperConfig,
+)
 from models.a_gpt import GPT_Custom, GPT_Custom_Config, HyperConfig
 from models.base_gpt import GPT_Base, GPT_Base_Config
 from models.base_gpt_matched import GPT_Base_Matched, GPT_Base_Matched_Config
+from models.diffusion_gpt import GPT_Diffusion, GPT_Diffusion_Config
 
 def count_params(model):
     total = sum(p.numel() for p in model.parameters())
@@ -28,3 +34,15 @@ print(f"Adaptive GPT: total={t:,}, trainable={tr:,}")
 base_gpt_matched = GPT_Base_Matched(GPT_Base_Matched_Config()).to(device)
 t, tr = count_params(base_gpt_matched)
 print(f"Base GPT Matched: total={t:,}, trainable={tr:,}")
+
+# 3) Diffusion GPT
+diffusion_gpt = GPT_Diffusion(GPT_Diffusion_Config()).to(device)
+t, tr = count_params(diffusion_gpt)
+print(f"Diffusion GPT: total={t:,}, trainable={tr:,}")
+
+# 4) Adaptive Diffusion GPT
+adaptive_diffusion_gpt = GPT_Adaptive_Diffusion(
+    GPT_Adaptive_Diffusion_Config(), hyper_config=DiffusionHyperConfig()
+).to(device)
+t, tr = count_params(adaptive_diffusion_gpt)
+print(f"Adaptive Diffusion GPT: total={t:,}, trainable={tr:,}")

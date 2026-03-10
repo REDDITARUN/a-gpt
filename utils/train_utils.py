@@ -69,3 +69,10 @@ def tokens_per_step(batch_size: int, block_size: int, grad_accum_steps: int) -> 
 def steps_per_epoch(num_train_tokens: int, batch_size: int, block_size: int, grad_accum_steps: int) -> float:
     return num_train_tokens / tokens_per_step(batch_size, block_size, grad_accum_steps)
 
+
+def steps_for_target_tokens(
+    target_tokens: int, batch_size: int, block_size: int, grad_accum_steps: int
+) -> int:
+    tps = tokens_per_step(batch_size, block_size, grad_accum_steps)
+    return math.ceil(target_tokens / max(1, tps))
+

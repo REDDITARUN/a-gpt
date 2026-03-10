@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class TrainConfig:
-    model_name: str = "base"  # base | adaptive | matched
+    model_name: str = "base"  # base | adaptive | matched | diffusion | adaptive_diffusion
 
     # Data sources
     tiny_data_path: str = "data/tiny_stories.txt"
@@ -34,6 +34,11 @@ class TrainConfig:
 
     # Data split
     val_ratio: float = 0.1
+
+    # Diffusion denoising options
+    diffusion_mask_token_id: int = 50256
+    num_diffusion_steps: int = 32
+    min_mask_ratio: float = 0.05
 
     # Logging/checkpoints
     checkpoint_dir: str = "checkpoints"

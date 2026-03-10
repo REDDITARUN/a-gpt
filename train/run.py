@@ -9,10 +9,22 @@ from torch.optim import AdamW
 from tqdm.auto import tqdm
 
 from models.a_gpt import GPT_Custom, GPT_Custom_Config, HyperConfig
+from models.a_diffusion_gpt import (
+    GPT_Adaptive_Diffusion,
+    GPT_Adaptive_Diffusion_Config,
+    HyperConfig as DiffusionHyperConfig,
+)
 from models.base_gpt import GPT_Base, GPT_Base_Config
 from models.base_gpt_matched import GPT_Base_Matched, GPT_Base_Matched_Config
+from models.diffusion_gpt import GPT_Diffusion, GPT_Diffusion_Config
 from train.config import TrainConfig
-from utils.data_utils import get_batch, load_text, split_train_val, tokenize_text
+from utils.data_utils import (
+    get_batch,
+    get_diffusion_batch,
+    load_text,
+    split_train_val,
+    tokenize_text,
+)
 from utils.train_utils import (
     count_params,
     get_cosine_lr,
@@ -22,6 +34,8 @@ from utils.train_utils import (
     steps_per_epoch,
     tokens_per_step,
 )
+
+DIFFUSION_MODEL_NAMES = {"diffusion", "adaptive_diffusion"}
 
 
 def build_model(cfg: TrainConfig):
@@ -35,6 +49,13 @@ def build_model(cfg: TrainConfig):
         model_cfg = GPT_Custom_Config()
         hyper_cfg = HyperConfig()
         return GPT_Custom(model_cfg, hyper_config=hyper_cfg)
+    if cfg.model_name == "diffusion":
+        model_cfg = GPT_Diffusion_Config(num_diffusion_steps=cfg.num_diffusion_steps)
+        return GPT_Diffusion(model_cfg)
+    if cfg.model_name == "adaptive_diffusion":
+        model_cfg = GPT_Adaptive_Diffusion_Config(num_diffusion_steps=cfg.num_diffusion_steps)
+        hyper_cfg = DiffusionHyperConfig()
+        return GPT_Adaptive_Diffusion(model_cfg, hyper_config=hyper_cfg)
     raise ValueError(f"Unknown model_name: {cfg.model_name}")
 
 
@@ -143,7 +164,24 @@ def train(cfg: TrainConfig):
         if dataset not in split_tokens:
             raise ValueError(f"Unknown dataset: {dataset}")
         source = split_tokens[dataset][split]
+        if cfg.model_name in DIFFUSION_MODEL_NAMES:
+            return get_diffusion_batch(
+                source,
+                model_block_size,
+                cfg.batch_size,
+                device,
+                cfg.diffusion_mask_token_id,
+                cfg.num_diffusion_steps,
+                min_mask_ratio=cfg.min_mask_ratio,
+            )
         return get_batch(source, model_block_size, cfg.batch_size, device)
+
+    def forward_on_batch(batch):
+        if cfg.model_name in DIFFUSION_MODEL_NAMES:
+            xb, yb, mb, tb = batch
+            return model(xb, yb, mask=mb, t=tb)
+        xb, yb = batch
+        return model(xb, yb)
 
     @torch.no_grad()
     def estimate_mixed_loss():
@@ -151,8 +189,7 @@ def train(cfg: TrainConfig):
         losses_by_source = {name: [] for name in source_names}
         for _ in range(cfg.eval_iters):
             for name in source_names:
-                xb, yb = get_batch_fn("val", name)
-                _, loss = model(xb, yb)
+                _, loss = forward_on_batch(get_batch_fn("val", name))
                 losses_by_source[name].append(loss.item())
         model.train()
         means = {name: sum(vals) / len(vals) for name, vals in losses_by_source.items()}
@@ -172,8 +209,7 @@ def train(cfg: TrainConfig):
             # Weighted pretraining: sample each micro-batch from one of four datasets.
             source_idx = int(torch.multinomial(train_sample_probs, num_samples=1).item())
             dataset_name = source_names[source_idx]
-            xb, yb = get_batch_fn("train", dataset_name)
-            _, loss = model(xb, yb)
+            _, loss = forward_on_batch(get_batch_fn("train", dataset_name))
             loss = loss / cfg.grad_accum_steps
             loss.backward()
             loss_accum += loss.item()
@@ -251,7 +287,11 @@ def train(cfg: TrainConfig):
 def parse_args():
     defaults = TrainConfig()
     parser = argparse.ArgumentParser(description="Weighted pretraining on tiny/cosmo/wiki/code sources.")
-    parser.add_argument("--model", choices=["base", "adaptive", "matched"], default=defaults.model_name)
+    parser.add_argument(
+        "--model",
+        choices=["base", "adaptive", "matched", "diffusion", "adaptive_diffusion"],
+        default=defaults.model_name,
+    )
     parser.add_argument("--tiny_data", default=defaults.tiny_data_path)
     parser.add_argument("--cosmo_data", default=defaults.cosmo_data_path)
     parser.add_argument("--wiki_data", default=defaults.wiki_data_path)
@@ -269,6 +309,9 @@ def parse_args():
     parser.add_argument("--base_lr", type=float, default=defaults.base_lr)
     parser.add_argument("--min_lr", type=float, default=defaults.min_lr)
     parser.add_argument("--val_ratio", type=float, default=defaults.val_ratio)
+    parser.add_argument("--diffusion_mask_token_id", type=int, default=defaults.diffusion_mask_token_id)
+    parser.add_argument("--num_diffusion_steps", type=int, default=defaults.num_diffusion_steps)
+    parser.add_argument("--min_mask_ratio", type=float, default=defaults.min_mask_ratio)
     parser.add_argument("--checkpoint_dir", default=defaults.checkpoint_dir)
     parser.add_argument("--checkpoint_name", default=defaults.checkpoint_name)
     parser.add_argument("--use_wandb", action="store_true")
@@ -298,6 +341,9 @@ if __name__ == "__main__":
         base_lr=args.base_lr,
         min_lr=args.min_lr,
         val_ratio=args.val_ratio,
+        diffusion_mask_token_id=args.diffusion_mask_token_id,
+        num_diffusion_steps=args.num_diffusion_steps,
+        min_mask_ratio=args.min_mask_ratio,
         checkpoint_dir=args.checkpoint_dir,
         checkpoint_name=args.checkpoint_name,
         use_wandb=args.use_wandb,

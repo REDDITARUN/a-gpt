@@ -5,3 +5,6 @@ env/
 wandb/
 .env
 data/*.txt
+.venv311/
+*/__pycache__/
+*.pt
