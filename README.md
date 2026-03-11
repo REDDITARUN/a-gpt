@@ -1,6 +1,6 @@
 # Adaptive GPT Mixed Pretraining
 
-Want the full details on the architecture changes and results? Read the complete write-up [here](LINK_GOES_HERE).
+Want the full details on the architecture changes and results? Read the complete write-up [here](https://teendifferent.substack.com/p/adaptive-attention-at-inference-time).
 
 Adaptive GPT applies per-head, input-dependent low-rank updates to attention values. Dynamic factors are generated from the ongoing hidden-state stream and used to modulate \(V\) before attention, enabling context-adaptive computation with limited additional parameters.
 
